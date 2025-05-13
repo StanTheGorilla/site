@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mind Modulator (Flow Edition - Simple Names)</title>
+    <style>
+        :root {
+            --primary-bg: #0D1B2A; --secondary-bg: #1B263B; --accent-color-1: #415A77;
+            --accent-color-2: #778DA9; --text-color: #E0E1DD; --highlight-text: #60C3E2;
+        }
+        body {
+            font-family: Arial, Helvetica, sans-serif; /* Simplified font stack */
+            background-color: var(--primary-bg); color: var(--text-color); margin: 0; padding: 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start; /* Allow scroll */
+            min-height: 100vh; text-align: center; overflow-y: auto; /* Ensure scrollability for new controls */
+            text-decoration: none; /* Explicitly remove decoration */
+        }
+        p, label, span, div { text-decoration: none !important; } /* Force no line-through */
+
+        .app-container {
+            background-color: var(--secondary-bg); padding: 20px; border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4); width: 95%; max-width: 650px; /* Wider for controls */
+            z-index: 1; border: 1px solid var(--accent-color-1); margin-top: 15px; margin-bottom: 15px;
+        }
+        h1 { color: var(--highlight-text); margin-bottom: 15px; font-weight: 400; letter-spacing: 0.5px;}
+        .mode-selection { display: flex; flex-wrap: wrap; justify-content: center; margin-bottom:15px;}
+        .mode-selection button {
+            background-color: var(--accent-color-1); color: var(--text-color); border: 1px solid var(--accent-color-2);
+            padding: 9px 11px; margin: 4px; border-radius: 8px; cursor: pointer; font-size: 0.8em; /* Slightly smaller */
+            transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .mode-selection button:hover, .mode-selection button.active {
+            background-color: var(--highlight-text); color: var(--primary-bg);
+            transform: translateY(-1px); box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+        }
+        .player { margin-top: 5px; }
+        #current-mode-display { font-size: 1.15em; font-weight: bold; color: var(--highlight-text); margin-bottom:5px; }
+        #current-generation-info {
+            font-size: 0.7em; color: var(--accent-color-2); min-height: 35px; margin-bottom: 8px; 
+            line-height: 1.3; max-height: 60px; overflow-y: auto;
+            background-color: rgba(13, 27, 42, 0.4); padding: 4px; border-radius: 4px; text-align: left;
+        }
+        #timer-display { font-size: 1.6em; margin: 8px 0; color: var(--text-color); font-weight: 300; }
+        .controls button {
+            background: linear-gradient(145deg, var(--highlight-text), #4FA8C0 ); color: var(--primary-bg);
+            border: none; padding: 10px 20px; margin: 5px; border-radius: 20px; cursor: pointer; font-size: 0.95em;
+            transition: all 0.2s ease; box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        }
+        .controls button:hover { opacity: 0.9; box-shadow: 0 5px 12px rgba(0,0,0,0.4); }
+        .controls button:disabled { background: var(--accent-color-1); cursor: not-allowed; box-shadow: none; }
+        
+        .global-controls, .mode-customization {
+            margin-top: 15px; padding: 10px; border: 1px dashed var(--accent-color-1); border-radius: 10px;
+        }
+        .global-controls label, .mode-customization label { margin-right: 8px; font-size:0.8em; color: var(--accent-color-2); }
+        .global-controls input[type="range"] { width: 150px; cursor: pointer;}
+        .mode-customization select {
+            background-color: var(--primary-bg); color: var(--text-color); border: 1px solid var(--accent-color-2);
+            padding: 5px; border-radius: 5px; font-size: 0.8em;
+        }
+        .customization-group { margin-bottom: 8px; }
+
+        .timer-settings { margin-top: 12px; display: flex; align-items: center; justify-content: center; }
+        .timer-settings label { margin-right: 8px; font-size:0.8em; color: var(--accent-color-2); }
+        .timer-settings input[type="number"] {
+            width: 40px; padding: 6px; border-radius: 6px; border: 1px solid var(--accent-color-1);
+            background-color: var(--primary-bg); color: var(--text-color); text-align: center; font-size:0.8em;
+        }
+        #visualizer-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.1;
+        }
+        .notice { font-size: 0.65em; margin-top:10px; color: var(--accent-color-2); }
+    </style>
+</head>
+<body>
+    <canvas id="visualizer-canvas"></canvas>
+    <div class="app-container">
+        <h1>Mind Modulator <Flow></h1>
+        <div class="global-controls">
+            <label for="master-volume-slider">Master Volume:</label>
+            <input type="range" id="master-volume-slider" min="0" max="1" step="0.01" value="0.55">
+        </div>
+
+        <div class="mode-selection">
+            <button data-mode="intense_focus">Deep Focus</button>
+            <button data-mode="creative_spark">Creative Boost</button>
+            <button data-mode="flow_spark">Flow State</button>
+            <button data-mode="alpha_relax">Relaxation</button>
+            <button data-mode="deep_sleep_cycle">Sleep</button>
+            <button data-mode="precision_focus">Sharp Focus</button>
+            <button data-mode="deep_meditation">Meditation</button>
+        </div>
+
+        <div class="mode-customization" id="mode-customization-panel" style="display:none;">
+            <p style="font-size:0.9em; margin-bottom:8px; color: var(--highlight-text);">Mode Customization:</p>
+            <div class="customization-group" id="custom-freq-group" style="display:none;">
+                <label for="custom-entrainment-freq">Entrainment Hz:</label>
+                <select id="custom-entrainment-freq"></select>
+            </div>
+            <div class="customization-group" id="custom-noise-group" style="display:none;">
+                <label for="custom-noise-type">Background Noise:</label>
+                <select id="custom-noise-type">
+                    <option value="pink">Pink Noise</option>
+                    <option value="brown">Brown Noise</option>
+                    <option value="white">White Noise</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="player">
+            <p>State: <span id="current-mode-display">Idle</span></p>
+            <div id="current-generation-info">Awaiting psychoacoustic calibration...</div>
+            <div id="timer-display">00:00:00</div>
+            <div class="controls">
+                <button id="play-pause-button" aria-label="Engage/Pause Sequence" disabled>Engage</button>
+                <button id="stop-button" aria-label="Terminate Sequence" disabled>Terminate</button>
+            </div>
+            <div class="timer-settings">
+                <label for="duration-input">Cycle (min):</label>
+                <input type="number" id="duration-input" value="30" min="1">
+            </div>
+            <p class="notice">Optimized for stereo headphones. Customization options appear after mode selection. Subjective effects may vary.</p>
+        </div>
+    </div>
+
+<script>
+    // DOM Elements
+    const modeButtons = document.querySelectorAll('.mode-selection button');
+    const currentModeDisplay = document.getElementById('current-mode-display');
+    const generationInfoDisplay = document.getElementById('current-generation-info');
+    const playPauseButton = document.getElementById('play-pause-button');
+    const stopButton = document.getElementById('stop-button');
+    const timerDisplay = document.getElementById('timer-display');
+    const durationInput = document.getElementById('duration-input');
+    const visualizerCanvas = document.getElementById('visualizer-canvas');
+    const canvasCtx = visualizerCanvas.getContext('2d');
+    const masterVolumeSlider = document.getElementById('master-volume-slider');
+    const customizationPanel = document.getElementById('mode-customization-panel');
+    const customFreqGroup = document.getElementById('custom-freq-group');
+    const customEntrainmentFreqSelect = document.getElementById('custom-entrainment-freq');
+    const customNoiseGroup = document.getElementById('custom-noise-group');
+    const customNoiseTypeSelect = document.getElementById('custom-noise-type');
+
+
+    // Audio Context & State
+    let audioContext;
+    let masterOutputGain; 
+    let entrainmentBusGain, ambientBusGain, fxBusGain; 
+    let analyserNode;
+    let visualizerDataArray, visualizerBufferLength;
+    let activeAudioGraph = { nodes: new Set(), intervals: new Set(), timeouts: new Set(), lfoControllers: new Set(), noiseSources: new Map() };
+
+    let currentMode = null;
+    let currentModeParams = {}; // Base parameters for the mode
+    let userCustomizations = { entrainmentFreq: null, noiseType: 'pink' }; // User overrides
+
+    let isPlaying = false;
+    let currentSessionTime = 0; 
+    let totalSessionDuration = 0; 
+    let primaryTimerInterval = null;
+    let visualizerId; 
+
+    const LOW_VOL = 0.0001;
+
+    // Mode definitions for customization
+    const MODE_CONFIG = {
+        'intense_focus':      { name: "Deep Focus",       entrainmentRange: [15, 18, 20, 30, 40], defaultEntrainment: 18, noiseOptions: true, defaultNoise: 'pink'},
+        'creative_spark':     { name: "Creative Boost",   entrainmentRange: [7, 8, 9, 10], defaultEntrainment: 8, noiseOptions: true, defaultNoise: 'brown'},
+        'flow_spark':         { name: "Flow State",       entrainmentRange: [7, 8.5, 10, 11.5, 13], defaultEntrainment: 10, noiseOptions: true, defaultNoise: 'pink'},
+        'alpha_relax':        { name: "Relaxation",       entrainmentRange: [8, 9, 10, 11, 12], defaultEntrainment: 10, noiseOptions: true, defaultNoise: 'brown'},
+        'deep_sleep_cycle':   { name: "Sleep",            entrainmentRange: [1, 1.5, 2, 2.5, 3], defaultEntrainment: 1.5, noiseOptions: true, defaultNoise: 'brown'},
+        'precision_focus':    { name: "Sharp Focus",      entrainmentRange: [35, 40, 45], defaultEntrainment: 40, noiseOptions: true, defaultNoise: 'white'},
+        'deep_meditation':    { name: "Meditation",       entrainmentRange: [4, 5, 6, 7], defaultEntrainment: 5, noiseOptions: true, defaultNoise: 'none'},
+    };
+
+
+    // --- MASTER AUDIO INITIALIZATION & CONTROL ---
+    async function initMasterAudio() {
+        if (!audioContext) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioContext.onstatechange = () => console.log("AudioContext state:", audioContext.state);
+
+                masterOutputGain = audioContext.createGain();
+                masterOutputGain.gain.setValueAtTime(parseFloat(masterVolumeSlider.value), audioContext.currentTime);
+                masterOutputGain.connect(audioContext.destination);
+
+                entrainmentBusGain = audioContext.createGain(); entrainmentBusGain.gain.value = 0.8;
+                ambientBusGain = audioContext.createGain(); ambientBusGain.gain.value = 0.7;
+                fxBusGain = audioContext.createGain(); fxBusGain.gain.value = 0.5;
+
+                entrainmentBusGain.connect(masterOutputGain);
+                ambientBusGain.connect(masterOutputGain);
+                fxBusGain.connect(masterOutputGain);
+
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = 512; 
+                analyserNode.smoothingTimeConstant = 0.75;
+                visualizerBufferLength = analyserNode.frequencyBinCount;
+                visualizerDataArray = new Uint8Array(visualizerBufferLength);
+                masterOutputGain.connect(analyserNode); 
+                
+                updateInfoPanel("Audio Core Initialized.", false);
+            } catch (e) { alert("Fatal Error: Audio Core could not materialize."); throw e; }
+        }
+        if (audioContext.state === 'suspended') await audioContext.resume().catch(err => {console.error("Resume failed", err); throw err;});
+        if (audioContext.state !== 'running') throw new Error("Audio Core recalcitrant: " + audioContext.state);
+    }
+
+    function emergencyClearAudioGraph(reason = "Unknown") {
+        console.warn(`EMERGENCY AUDIO CLEAR: ${reason}`);
+        activeAudioGraph.intervals.forEach(clearInterval);
+        activeAudioGraph.timeouts.forEach(clearTimeout);
+        activeAudioGraph.lfoControllers.forEach(lfo => lfo.stop());
+        activeAudioGraph.nodes.forEach(node => {
+            try {
+                if (node.stop && typeof node.stop === 'function') node.stop(audioContext.currentTime + 0.05);
+                if (node.disconnect && typeof node.disconnect === 'function') node.disconnect();
+            } catch(e) {/*ignore*/}
+        });
+        activeAudioGraph.nodes.clear(); activeAudioGraph.intervals.clear(); activeAudioGraph.timeouts.clear(); activeAudioGraph.lfoControllers.clear();
+        activeAudioGraph.noiseSources.forEach(ns => { 
+            if(ns.source && activeAudioGraph.nodes.has(ns.source)) ns.source.disconnect();
+            if(ns.gainNode && activeAudioGraph.nodes.has(ns.gainNode)) ns.gainNode.disconnect();
+        });
+        activeAudioGraph.noiseSources.clear();
+        if(globalReverbInput && activeAudioGraph.nodes.has(globalReverbInput)) { 
+            try{ globalReverbInput.disconnect(); activeAudioGraph.nodes.delete(globalReverbInput); globalReverbInput = null;} catch(e){}
+        }
+        if(generationInfoDisplay) generationInfoDisplay.innerHTML = "System Cleared.";
+    }
+    // --- UTILITY & HELPER NODE CREATION ---
+    function addNode(node, type = 'generic') { activeAudioGraph.nodes.add(node); node.nodeType = type; return node; } 
+    function addInterval(id) { activeAudioGraph.intervals.add(id); return id; }
+    function addTimeout(id) { activeAudioGraph.timeouts.add(id); return id; }
+    function addLFO(lfo) { activeAudioGraph.lfoControllers.add(lfo); return lfo; }
+
+    function createGain(initialGain = 1) { const g = audioContext.createGain(); g.gain.setValueAtTime(initialGain, audioContext.currentTime); return addNode(g,'gain'); }
+    function createOsc(freq, type = 'sine', detune = 0) { const o = audioContext.createOscillator(); o.frequency.value = freq; o.type = type; o.detune.value = detune; return addNode(o,'osc'); }
+    function createFilter(type = "lowpass", freq = 1000, q = 1) { const f = audioContext.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return addNode(f,'filter'); }
+    function createPanner(pan = 0) { const p = audioContext.createStereoPanner(); p.pan.value = pan; return addNode(p,'panner'); }
+    function createDelay(delayTime = 0.5, maxDelayTime = 1.0) { const d = audioContext.createDelay(maxDelayTime); d.delayTime.value = delayTime; return addNode(d,'delay'); }
+    
+    class LFOController { 
+         constructor(targetParam, freq, depth, type = 'sine', baseValueOffset = 0) {
+            this.audioCtx = audioContext;
+            this.targetParam = targetParam;
+            this.active = true;
+
+            if (!this.targetParam || typeof this.targetParam.setValueAtTime !== 'function') {
+                console.warn("LFOController: Invalid targetParam", this.targetParam);
+                this.active = false; return;
+            }
+            
+            this.osc = createOsc(freq, type);
+            this.depthGain = createGain(depth);
+            this.baseValueOffset = baseValueOffset;
+            
+            if (this.baseValueOffset !== 0 && this.targetParam) { 
+                this.offsetSource = this.audioCtx.createConstantSource();
+                this.offsetSource.offset.value = this.baseValueOffset;
+                try{ this.offsetSource.connect(this.targetParam); this.offsetSource.start(); addNode(this.offsetSource,'offset_const'); }
+                catch(e){console.error("LFO offset connect error", e); this.active=false; return;}
+            }
+
+            try{ this.osc.connect(this.depthGain); this.depthGain.connect(this.targetParam); this.osc.start(); addLFO(this); }
+            catch(e){console.error("LFO connect error", e); this.active=false; return;}
+        }
+        setDepth(newDepth) { if(this.active && this.depthGain && this.depthGain.gain) this.depthGain.gain.setTargetAtTime(newDepth, this.audioCtx.currentTime, 0.02); }
+        setRate(newRate) { if(this.active && this.osc && this.osc.frequency && newRate > 0.001) this.osc.frequency.setTargetAtTime(newRate, this.audioCtx.currentTime, 0.02); }
+        stop() {
+            this.active = false;
+            if(this.osc) { try {this.osc.stop(); this.osc.disconnect();} catch(e){} activeAudioGraph.nodes.delete(this.osc);}
+            if(this.depthGain) { try {this.depthGain.disconnect();} catch(e){} activeAudioGraph.nodes.delete(this.depthGain); }
+            if(this.offsetSource) { try {this.offsetSource.stop(); this.offsetSource.disconnect(); } catch(e){} activeAudioGraph.nodes.delete(this.offsetSource); }
+        }
+    }
+    
+    function createNoiseGen(type = "white", duration = 2) { 
+        if (!audioContext) return null;
+        const bufferSize = duration * audioContext.sampleRate;
+        const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        if (type === 'white') { for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; }
+        else { 
+            let b = [0,0,0,0,0,0,0]; let white = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                white = Math.random() * 2 - 1;
+                if (type === 'pink') {
+                    b[0] = 0.99886 * b[0] + white * 0.0555179; b[1] = 0.99332 * b[1] + white * 0.0750759;
+                    b[2] = 0.96900 * b[2] + white * 0.1538520; b[3] = 0.86650 * b[3] + white * 0.3104856;
+                    b[4] = 0.55000 * b[4] + white * 0.5329522; b[5] = -0.7616 * b[5] - white * 0.0168980;
+                    data[i] = b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6] + white * 0.5362;
+                    b[6] = white * 0.115926; data[i] *= 0.11; 
+                } else { 
+                    let lastOutput = i > 0 ? data[i-1] : 0;
+                    data[i] = (lastOutput + (0.02 * white)) / 1.02;
+                }
+            }
+            let max = 0; data.forEach(v => {if(Math.abs(v) > max) max=Math.abs(v);});
+            if(max > 0) data.forEach((v,idx) => data[idx] = (v/max) * 0.85 ); 
+        }
+        const source = audioContext.createBufferSource(); source.buffer = buffer; source.loop = true;
+        return addNode(source, type + '_noise_src');
+    }
+
+    function updateInfoPanel(text, append = false) {
+        if (!generationInfoDisplay) return; 
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit'});
+        const newText = `${timestamp}: ${text}`;
+        if (append) {
+            const currentHTML = generationInfoDisplay.innerHTML;
+            const lines = currentHTML.split('<br>');
+            const maxLines = 8; 
+            if(lines.length >= maxLines) { 
+                generationInfoDisplay.innerHTML = lines.slice(lines.length - (maxLines -1) ).join('<br>') + `<br>${newText}`;
+            } else {
+                generationInfoDisplay.innerHTML += `<br>${newText}`;
+            }
+        } else {
+            generationInfoDisplay.innerHTML = newText;
+        }
+        if (generationInfoDisplay.scrollHeight > generationInfoDisplay.clientHeight) {
+            generationInfoDisplay.scrollTop = generationInfoDisplay.scrollHeight;
+        }
+    }
+    
+    // --- ADVANCED SOUND MODULES ---
+    function createFMPad(carrierFreq, modFreqRatio, modDepthIndex, attackTime = 0.5, releaseTime = 2, destination = ambientBusGain) { 
+         if (!audioContext || audioContext.state !== 'running') return ()=>{};
+        const now = audioContext.currentTime;
+        const carrier = createOsc(carrierFreq, 'sine');
+        const modulator = createOsc(carrierFreq * modFreqRatio, 'sine');
+        const modGain = createGain(carrierFreq * modFreqRatio * modDepthIndex);
+        const envelope = createGain(LOW_VOL);
+
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency); 
+        carrier.connect(envelope).connect(destination);
+
+        envelope.gain.setValueAtTime(LOW_VOL, now);
+        envelope.gain.linearRampToValueAtTime(1, now + attackTime); 
+
+        carrier.start(now);
+        modulator.start(now);
+        
+        return () => { 
+            if (!audioContext || audioContext.state !== 'running') return;
+            const releaseStart = audioContext.currentTime;
+            if (!activeAudioGraph.nodes.has(envelope)) return; 
+            const currentEnvGainVal = envelope.gain.value;
+            envelope.gain.cancelScheduledValues(releaseStart);
+            envelope.gain.setValueAtTime(currentEnvGainVal, releaseStart);
+            envelope.gain.linearRampToValueAtTime(LOW_VOL, releaseStart + releaseTime);
+            addTimeout(setTimeout(() => {
+                if(carrier && activeAudioGraph.nodes.has(carrier)) {carrier.stop(); carrier.disconnect(); activeAudioGraph.nodes.delete(carrier);}
+                if(modulator && activeAudioGraph.nodes.has(modulator)) {modulator.stop(); modulator.disconnect(); activeAudioGraph.nodes.delete(modulator);}
+                if(envelope && activeAudioGraph.nodes.has(envelope)) {envelope.disconnect(); activeAudioGraph.nodes.delete(envelope);}
+            }, (releaseTime + 0.5) * 1000));
+        };
+    }
+    function createGranularCloud(baseFreq, density = 10, spread = 50, grainDur = 0.1, volume, panWidth=0.8, destination = ambientBusGain) { 
+        if (!audioContext || audioContext.state !== 'running') return;
+        const cloudGain = createGain(volume);
+        cloudGain.connect(destination);
+        const intervalTime = Math.max(50, (1000 / density) * (0.8 + Math.random()*0.4) );
+
+        const spawnGrain = () => {
+            if (!isPlaying || !audioContext || audioContext.state !== 'running') return;
+            const grainOsc = createOsc(baseFreq + (Math.random() - 0.5) * spread * 2, 'triangle');
+            const grainEnv = createGain(LOW_VOL);
+            const grainPan = createPanner((Math.random() - 0.5) * panWidth * 2);
+            grainOsc.connect(grainEnv).connect(grainPan).connect(cloudGain);
+            
+            const now = audioContext.currentTime;
+            const attack = grainDur * (0.1 + Math.random()*0.2); 
+            const hold = grainDur * (0.2 + Math.random()*0.3);
+            const release = grainDur * (0.3 + Math.random()*0.4);
+            
+            grainEnv.gain.setValueAtTime(LOW_VOL, now);
+            grainEnv.gain.linearRampToValueAtTime(0.7 + Math.random()*0.3, now + attack);
+            grainEnv.gain.setValueAtTime(grainEnv.gain.value, now + attack + hold); 
+            grainEnv.gain.linearRampToValueAtTime(LOW_VOL, now + attack + hold + release);
+            
+            grainOsc.start(now);
+            const totalGrainLife = attack + hold + release + 0.05;
+            grainOsc.stop(now + totalGrainLife); 
+            addTimeout(setTimeout(() => { 
+                if(activeAudioGraph.nodes.has(grainOsc)) {grainOsc.disconnect(); activeAudioGraph.nodes.delete(grainOsc);}
+                if(activeAudioGraph.nodes.has(grainEnv)) {grainEnv.disconnect(); activeAudioGraph.nodes.delete(grainEnv);}
+                if(activeAudioGraph.nodes.has(grainPan)) {grainPan.disconnect(); activeAudioGraph.nodes.delete(grainPan);}
+            }, totalGrainLife * 1000 + 100));
+        };
+        for(let k=0; k< Math.min(density, 5) ; k++) spawnGrain();
+        addInterval(setInterval(spawnGrain, intervalTime));
+        updateInfoPanel("Granular Synthesis Active", true);
+    }
+    function playPolyrhythmicEntrainment(binauralBase, binauralBeat, isochronicCarrier, isochronicPulse, vol, dest = entrainmentBusGain) { 
+        if (!audioContext || audioContext.state !== 'running') return;
+        const oscL = createOsc(binauralBase, 'sine'); const oscR = createOsc(binauralBase + binauralBeat, 'sine');
+        const gainL = createGain(vol*0.7); const gainR = createGain(vol*0.7);
+        const merger = addNode(audioContext.createChannelMerger(2), 'merger');
+        oscL.connect(gainL).connect(merger, 0, 0); oscR.connect(gainR).connect(merger, 0, 1);
+        merger.connect(dest); oscL.start(); oscR.start();
+
+        if(isochronicCarrier > 0 && isochronicPulse > 0) { // Only play isochronic if frequencies are valid
+            const isoOsc = createOsc(isochronicCarrier, 'sine'); const isoEnv = createGain(LOW_VOL);
+            isoOsc.connect(isoEnv).connect(dest); isoOsc.start();
+            const pulseDur = 1.0 / isochronicPulse; const onDur = pulseDur * 0.35; 
+            function isoPulse() { if(!audioContext||audioContext.state!=='running'||!activeAudioGraph.nodes.has(isoEnv)||!isoEnv.gain) return; const n=audioContext.currentTime; isoEnv.gain.setTargetAtTime(vol,n,0.001); isoEnv.gain.setTargetAtTime(LOW_VOL,n+onDur,0.005);}
+            isoPulse(); addInterval(setInterval(isoPulse, pulseDur * 1000));
+            updateInfoPanel(`Entrainment: ${binauralBeat}Hz Bin. + ${isochronicPulse}Hz Iso.`, true);
+        } else {
+             updateInfoPanel(`Entrainment: ${binauralBeat}Hz Binaural`, true);
+        }
+    }
+    function createBasicReverb(destination = fxBusGain) { 
+        if (!audioContext || audioContext.state !== 'running') return null;
+        const inputGain = createGain(1); 
+        const outputGain = createGain(0.35); 
+        const preDelay = createDelay(0.015, 0.1);
+        inputGain.connect(preDelay);
+
+        const delaysConfig = [ 
+            { time: 0.023, gain: 0.65, filterFreq: 5000, feedback: 0.15 }, { time: 0.038, gain: 0.55, filterFreq: 3500, feedback: 0.25 },
+            { time: 0.061, gain: 0.45, filterFreq: 2200, feedback: 0.30 }, { time: 0.093, gain: 0.35, filterFreq: 1800, feedback: 0.20 }
+        ];
+        delaysConfig.forEach(conf => {
+            const delay = createDelay(conf.time, 0.2); const filter = createFilter('lowpass', conf.filterFreq);
+            const tapGain = createGain(conf.gain); const feedbackGain = createGain(conf.feedback);
+            preDelay.connect(delay); delay.connect(filter).connect(tapGain);
+            tapGain.connect(outputGain); tapGain.connect(feedbackGain).connect(delay); 
+        });
+        outputGain.connect(destination);
+        return inputGain;
+    }
+    
+    function playCustomNoise(destination = ambientBusGain) {
+        if (activeAudioGraph.noiseSources.has('custom_main')) {
+            const oldNoise = activeAudioGraph.noiseSources.get('custom_main');
+            if (oldNoise.source && activeAudioGraph.nodes.has(oldNoise.source)) { try { oldNoise.source.stop(); oldNoise.source.disconnect(); activeAudioGraph.nodes.delete(oldNoise.source); } catch(e){} }
+            if (oldNoise.gainNode && activeAudioGraph.nodes.has(oldNoise.gainNode)) { try {oldNoise.gainNode.disconnect(); activeAudioGraph.nodes.delete(oldNoise.gainNode);} catch(e){} }
+            activeAudioGraph.noiseSources.delete('custom_main');
+        }
+        if (userCustomizations.noiseType && userCustomizations.noiseType !== 'none' && currentModeParams.ambientVolume > LOW_VOL) { // Check ambientVol
+            const noiseSource = createNoiseGen(userCustomizations.noiseType);
+            const noiseGain = createGain(currentModeParams.ambientVolume * 0.8); // Adjusted gain
+            noiseSource.connect(noiseGain).connect(destination);
+            noiseSource.start();
+            activeAudioGraph.noiseSources.set('custom_main', {source: noiseSource, gainNode: noiseGain});
+            updateInfoPanel(`Background: ${userCustomizations.noiseType.charAt(0).toUpperCase() + userCustomizations.noiseType.slice(1)} Noise`, true);
+        } else {
+            updateInfoPanel("Background Noise: Off/Low", true);
+        }
+    }
+
+
+    // --- MAIN MODE GENERATION ORCHESTRATION ---
+    let globalReverbInput = null;
+    let modeSpecificLFOs = []; 
+
+    function generateModeAudio(modeKey) {
+        emergencyClearAudioGraph("Mode Change: " + modeKey); 
+        if (!audioContext || audioContext.state !== 'running') { updateInfoPanel("Audio core offline."); return; }
+
+        if (!globalReverbInput || !activeAudioGraph.nodes.has(globalReverbInput)) {
+            globalReverbInput = createBasicReverb(fxBusGain);
+            if (globalReverbInput) updateInfoPanel("Spatial Processor Calibrated.", true); else updateInfoPanel("ERR: Spatial Proc. Fail.", true);
+        }
+
+        modeSpecificLFOs.forEach(lfo => lfo.stop()); modeSpecificLFOs = [];
+        
+        currentModeParams = { 
+            entrainmentVolume: 0.12, ambientVolume: 0.08, 
+            globalReverbSendLevel: 0.2, 
+            targetEntrainmentFreq: MODE_CONFIG[modeKey]?.defaultEntrainment || 10, 
+        };
+        currentModeParams.targetEntrainmentFreq = parseFloat(userCustomizations.entrainmentFreq) || MODE_CONFIG[modeKey]?.defaultEntrainment || 10;
+        
+        updateInfoPanel(`Sequence: ${MODE_CONFIG[modeKey]?.name || modeKey}. Target: ${currentModeParams.targetEntrainmentFreq}Hz`, false);
+
+        const entrainmentToReverb = createGain(LOW_VOL); if(globalReverbInput) entrainmentBusGain.connect(entrainmentToReverb).connect(globalReverbInput);
+        const ambientToReverb = createGain(LOW_VOL); if(globalReverbInput) ambientBusGain.connect(ambientToReverb).connect(globalReverbInput);
+
+        playCustomNoise(ambientBusGain);
+
+        switch (modeKey) {
+            case 'intense_focus': 
+                currentModeParams.entrainmentVolume = 0.1; currentModeParams.ambientVolume = 0.04; currentModeParams.globalReverbSendLevel = 0.1;
+                playPolyrhythmicEntrainment(120, 15, 150, currentModeParams.targetEntrainmentFreq, currentModeParams.entrainmentVolume, entrainmentBusGain); 
+                const fmIF1 = createFMPad(55, 1.618, 4.5, 2, 6, ambientBusGain);
+                const fmIF2 = createFMPad(80, 0.618, 3.5, 3, 7, ambientBusGain);
+                addTimeout(setTimeout(()=>fmIF1(), Math.max(10, totalSessionDuration - 7)*1000)); 
+                addTimeout(setTimeout(()=>fmIF2(), Math.max(10, totalSessionDuration - 8)*1000));
+                if(Math.random() > 0.4) createGranularCloud(180, 10, 70, 0.1, currentModeParams.ambientVolume * 0.5, 0.6, ambientBusGain);
+                break;
+
+            case 'creative_spark': 
+                currentModeParams.entrainmentVolume = 0.13; currentModeParams.ambientVolume = 0.07; currentModeParams.globalReverbSendLevel = 0.22;
+                playPolyrhythmicEntrainment(90, currentModeParams.targetEntrainmentFreq, 0, 0, currentModeParams.entrainmentVolume, entrainmentBusGain); 
+                const csFM = createFMPad(45, 2.4, 5.5, 4, 9, ambientBusGain);
+                addTimeout(setTimeout(()=>csFM(), Math.max(10, totalSessionDuration - 10)*1000)); 
+                
+                const csMelSc = [0, 4, 7, 11]; const csMelBF = 30; 
+                addInterval(setInterval(() => {
+                    if(!isPlaying || !audioContext || audioContext.state!=='running')return;
+                    const fr = csMelBF * Math.pow(2, csMelSc[Math.floor(Math.random()*csMelSc.length)]/12 + Math.floor(Math.random()*2) ); 
+                    const noteO=createOsc(fr,'triangle');const noteE=createGain(LOW_VOL);const noteP=createPanner((Math.random()*2-1)*0.8);
+                    const noteTR=createGain(0.3+Math.random()*0.3);
+                    noteO.connect(noteE).connect(noteP).connect(ambientBusGain);
+                    if(globalReverbInput)noteP.connect(noteTR).connect(globalReverbInput);
+                    const n=audioContext.currentTime;const att=0.4+Math.random()*0.6;const dec=2+Math.random()*3;
+                    if(noteE.gain){noteE.gain.setTargetAtTime(currentModeParams.ambientVolume*0.12,n,att*0.08); noteE.gain.setTargetAtTime(LOW_VOL,n+att,dec*0.12);}
+                    noteO.start(n); noteO.stop(n+att+dec+0.1);
+                    addTimeout(setTimeout(()=> {
+                        if(activeAudioGraph.nodes.has(noteO)) { noteO.disconnect(); activeAudioGraph.nodes.delete(noteO);}
+                        if(activeAudioGraph.nodes.has(noteE)) { noteE.disconnect(); activeAudioGraph.nodes.delete(noteE);}
+                        if(activeAudioGraph.nodes.has(noteP)) { noteP.disconnect(); activeAudioGraph.nodes.delete(noteP);}
+                        if(activeAudioGraph.nodes.has(noteTR)) { noteTR.disconnect(); activeAudioGraph.nodes.delete(noteTR);}
+                     }, (att+dec+0.3)*1000));
+                }, 8000 + Math.random()*5000));
+                break;
+
+            case 'flow_spark': 
+                currentModeParams.entrainmentVolume = 0.12; currentModeParams.ambientVolume = 0.075; currentModeParams.globalReverbSendLevel = 0.28;
+                playPolyrhythmicEntrainment(95, currentModeParams.targetEntrainmentFreq, 0,0, currentModeParams.entrainmentVolume, entrainmentBusGain); 
+                const flowFM1Rel = createFMPad(60, 1.5, 3, 4, 8, ambientBusGain); 
+                const flowFM2Rel = createFMPad(75, 0.75, 2.5, 5, 10, ambientBusGain); 
+                addTimeout(setTimeout(()=>flowFM1Rel(), Math.max(15, totalSessionDuration - 9)*1000));
+                addTimeout(setTimeout(()=>flowFM2Rel(), Math.max(15, totalSessionDuration - 11)*1000));
+
+                if (userCustomizations.noiseType === 'pink' && activeAudioGraph.noiseSources.has('custom_main')) {
+                    const pinkNoiseInfo = activeAudioGraph.noiseSources.get('custom_main');
+                    if (pinkNoiseInfo && pinkNoiseInfo.gainNode) {
+                        const flowFilter = createFilter('bandpass', 300, 3);
+                        pinkNoiseInfo.gainNode.disconnect(); 
+                        pinkNoiseInfo.gainNode.connect(flowFilter).connect(ambientBusGain);
+                        if (flowFilter.frequency) modeSpecificLFOs.push(new LFOController(flowFilter.frequency, 0.03 + Math.random()*0.02, 200 + Math.random()*100, 'sine', 300));
+                        updateInfoPanel("Dynamic Filter Sweep Active", true);
+                    }
+                }
+                
+                addInterval(setInterval(() => {
+                    if(!isPlaying || !audioContext || audioContext.state!=='running')return;
+                    const chimeC = 250 + Math.random()*350; const chimeR = 3.0 + Math.random()*2; const chimeMD = 4+Math.random()*3;
+                    const chimePan = createPanner((Math.random()-0.5)*1.5);
+                    const chimeDest = createGain(1); chimeDest.connect(chimePan);
+                    if(globalReverbInput) chimePan.connect(globalReverbInput); else chimePan.connect(fxBusGain);
+                    const chimeRel = createFMPad(chimeC, chimeR, chimeMD, 0.01, 1.5+Math.random()*1.5, chimeDest);
+                    addTimeout(setTimeout(()=>chimeRel(), 40)); 
+                }, 12000 + Math.random()*8000));
+                break;
+
+            case 'alpha_relax':
+                currentModeParams.entrainmentVolume = 0.15; currentModeParams.ambientVolume = 0.09; currentModeParams.globalReverbSendLevel = 0.18;
+                playPolyrhythmicEntrainment(100, currentModeParams.targetEntrainmentFreq, 0,0, currentModeParams.entrainmentVolume, entrainmentBusGain); 
+                const arFM = createFMPad(50, 0.5, 2, 6, 12, ambientBusGain); 
+                addTimeout(setTimeout(()=>arFM(), Math.max(10, totalSessionDuration - 13)*1000));
+                if(Math.random() > 0.6) createGranularCloud(150, 8, 50, 0.15, currentModeParams.ambientVolume * 0.4, 0.5, ambientBusGain);
+                break;
+
+            case 'deep_sleep_cycle': 
+                currentModeParams.entrainmentVolume = 0.17; currentModeParams.ambientVolume = 0.11; currentModeParams.globalReverbSendLevel = 0.03;
+                playPolyrhythmicEntrainment(60, currentModeParams.targetEntrainmentFreq, 65, currentModeParams.targetEntrainmentFreq + 0.5, currentModeParams.entrainmentVolume, entrainmentBusGain); 
+                const dsNoise = activeAudioGraph.noiseSources.get('custom_main');
+                if (dsNoise && dsNoise.gainNode && dsNoise.gainNode.gain) { 
+                     modeSpecificLFOs.push(new LFOController(dsNoise.gainNode.gain, 0.03 + Math.random()*0.015, currentModeParams.ambientVolume * 0.35, 'sine', currentModeParams.ambientVolume * 0.65));
+                }
+                const stage2TDS = Math.max(30, totalSessionDuration * 0.5);
+                 addTimeout(setTimeout(() => {
+                    if(isPlaying && currentMode === 'deep_sleep_cycle') {
+                        updateInfoPanel("Sleep Cycle: Sub-Delta Oscillation Enhanced", false);
+                        if (modeSpecificLFOs[0]) modeSpecificLFOs[0].setRate(0.015 + Math.random()*0.01);
+                    }
+                }, stage2TDS * 1000));
+                break;
+
+            case 'precision_focus': 
+                currentModeParams.entrainmentVolume = 0.18; currentModeParams.ambientVolume = 0.035; currentModeParams.globalReverbSendLevel = 0.02;
+                const pfIsoO = createOsc(160,'triangle'); const pfIsoE = createGain(LOW_VOL);
+                const pfIsoF = createFilter('bandpass',160,28);
+                pfIsoO.connect(pfIsoF).connect(pfIsoE).connect(entrainmentBusGain); pfIsoO.start();
+                const pfPD = 1.0 / currentModeParams.targetEntrainmentFreq; const pfOD = pfPD*0.33;
+                function pfIP() {if(!audioContext||audioContext.state!=='running'||!activeAudioGraph.nodes.has(pfIsoE)||!pfIsoE.gain)return; const n=audioContext.currentTime;pfIsoE.gain.setTargetAtTime(currentModeParams.entrainmentVolume, n, 0.0003); pfIsoE.gain.setTargetAtTime(LOW_VOL,n+pfOD,0.0015);}
+                pfIP(); addInterval(setInterval(pfIP, pfPD * 1000));
+                
+                const pfDRoot = 45; const pfDHarm = [1, 1.50, 2.00, 2.50, 3.00]; 
+                pfDHarm.forEach(r => { const dO=createOsc(pfDRoot*r,'sine');const dOG=createGain(currentModeParams.ambientVolume/pfDHarm.length); dO.connect(dOG).connect(ambientBusGain);dO.start();});
+                break;
+
+            case 'deep_meditation': 
+                currentModeParams.entrainmentVolume = 0.07; currentModeParams.ambientVolume = 0.08; currentModeParams.globalReverbSendLevel = 0.65; 
+
+                const dmIsoO = createOsc(70,'sine'); const dmIsoE=createGain(LOW_VOL);
+                const dmIsoF = createFilter('lowpass',130,1.5);
+                dmIsoO.connect(dmIsoF).connect(dmIsoE).connect(entrainmentBusGain);dmIsoO.start();
+                const dmPD = 1.0/currentModeParams.targetEntrainmentFreq; const dmAtt = dmPD*0.3; const dmDec = dmPD*0.65;
+                function dmIP(){if(!audioContext||audioContext.state!=='running'||!activeAudioGraph.nodes.has(dmIsoE)||!dmIsoE.gain)return;const n=audioContext.currentTime;dmIsoE.gain.cancelScheduledValues(n);dmIsoE.gain.setTargetAtTime(LOW_VOL,n,0.001);dmIsoE.gain.setTargetAtTime(currentModeParams.entrainmentVolume,n+0.015,dmAtt*0.08);dmIsoE.gain.setTargetAtTime(LOW_VOL,n+dmAtt, dmDec*0.08);}
+                dmIP(); addInterval(setInterval(dmIP, dmPD * 1000));
+                
+                addInterval(setInterval(() => {
+                    if(!isPlaying || !audioContext || audioContext.state!=='running')return;
+                    const bellC = 180+Math.random()*350; const bellR=2.8+Math.random()*2.5; const bellMD=4+Math.random()*4;
+                    const bellPan = createPanner((Math.random()-0.5)*1.9);
+                    const bellDestG = createGain(1); bellDestG.connect(bellPan);
+                    if(globalReverbInput) bellPan.connect(globalReverbInput); else bellPan.connect(fxBusGain);
+                    const bellRel = createFMPad(bellC, bellR, bellMD, 0.015, 3+Math.random()*3, bellDestG);
+                    addTimeout(setTimeout(()=>bellRel(),45)); 
+                }, 10000 + Math.random()*7500));
+
+                if (userCustomizations.noiseType !== 'none' || Math.random() < 0.3) { 
+                     createGranularCloud(380, 18, 280, 0.22, currentModeParams.ambientVolume*0.55, 0.95, ambientBusGain);
+                }
+                break;
+            default: console.warn("Unknown mode:", modeKey); updateInfoPanel("Selected vector not implemented.");
+        }
+        if(entrainmentToReverb && entrainmentToReverb.gain) entrainmentToReverb.gain.setTargetAtTime(currentModeParams.globalReverbSendLevel, audioContext.currentTime, 0.1);
+        if(ambientToReverb && ambientToReverb.gain) ambientToReverb.gain.setTargetAtTime(currentModeParams.globalReverbSendLevel, audioContext.currentTime, 0.1);
+        updateInfoPanel(`Parameters: E:${currentModeParams.entrainmentVolume.toFixed(2)} A:${currentModeParams.ambientVolume.toFixed(2)} R:${currentModeParams.globalReverbSendLevel.toFixed(2)}`, true);
+    }
+    
+    function updateCustomizationPanel() {
+        if (!currentMode || !MODE_CONFIG[currentMode]) {
+            customizationPanel.style.display = 'none'; return;
+        }
+        const config = MODE_CONFIG[currentMode];
+        customizationPanel.style.display = 'block';
+
+        if (config.entrainmentRange && config.entrainmentRange.length > 0) {
+            customFreqGroup.style.display = 'block';
+            customEntrainmentFreqSelect.innerHTML = ''; 
+            config.entrainmentRange.forEach(freq => {
+                const option = document.createElement('option');
+                option.value = freq; option.textContent = `${freq} Hz`;
+                customEntrainmentFreqSelect.appendChild(option);
+            });
+            customEntrainmentFreqSelect.value = userCustomizations.entrainmentFreq || config.defaultEntrainment;
+        } else { customFreqGroup.style.display = 'none'; }
+
+        if (config.noiseOptions) {
+            customNoiseGroup.style.display = 'block';
+            customNoiseTypeSelect.value = userCustomizations.noiseType || config.defaultNoise || 'pink';
+        } else { customNoiseGroup.style.display = 'none'; }
+    }
+
+    async function engageSequence() {
+        if (!currentMode) { alert("Select state vector."); return; }
+        try {
+            await initMasterAudio(); 
+            totalSessionDuration = parseInt(durationInput.value) * 60;
+            if (isNaN(totalSessionDuration) || totalSessionDuration <= 0) totalSessionDuration = 30 * 60;
+            currentSessionTime = 0;
+            
+            if (MODE_CONFIG[currentMode]?.entrainmentRange) userCustomizations.entrainmentFreq = parseFloat(customEntrainmentFreqSelect.value);
+            else userCustomizations.entrainmentFreq = MODE_CONFIG[currentMode]?.defaultEntrainment;
+            if (MODE_CONFIG[currentMode]?.noiseOptions) userCustomizations.noiseType = customNoiseTypeSelect.value;
+            else userCustomizations.noiseType = MODE_CONFIG[currentMode]?.defaultNoise || 'none';
+
+            generateModeAudio(currentMode); 
+            isPlaying = true;
+            playPauseButton.textContent = 'Pause'; stopButton.disabled = false;
+            customizationPanel.style.display = 'none'; 
+            startPrimaryTimer();
+            if (!visualizerId && requestAnimationFrame) requestAnimationFrame(drawVisualizerLoop); 
+            updateInfoPanel(`${MODE_CONFIG[currentMode]?.name || currentMode} engaged. Cycle: ${Math.floor(totalSessionDuration/60)} min.`);
+        } catch (e) { console.error("Engage Error:", e); alert("Engage Error: " + e.message); emergencyClearAudioGraph("Engage Fail"); isPlaying = false; }
+    }
+
+    function pauseSequence() {
+        if (audioContext && audioContext.state === 'running') {
+             audioContext.suspend().then(() => console.log("AudioContext suspended.")).catch(e=>console.error("Suspend err",e));
+        }
+        isPlaying = false; playPauseButton.textContent = 'Engage';
+        clearInterval(primaryTimerInterval);
+        if (visualizerId && cancelAnimationFrame) { cancelAnimationFrame(visualizerId); visualizerId = null; }
+        updateInfoPanel("Sequence paused.", true);
+        if(currentMode) updateCustomizationPanel();
+    }
+
+    function terminateSequence() {
+        if (audioContext) {
+            if (audioContext.state === 'suspended') {
+                 audioContext.resume().then(()=>emergencyClearAudioGraph("Terminate (Resumed)")).catch(e=>emergencyClearAudioGraph("Terminate (Resume Fail)"));
+            } else { emergencyClearAudioGraph("User Terminate"); }
+        }
+        isPlaying = false; playPauseButton.textContent = 'Engage'; stopButton.disabled = true;
+        clearInterval(primaryTimerInterval); currentSessionTime = 0; updateTimerDisplayHMS(); 
+        if (visualizerId && cancelAnimationFrame) { cancelAnimationFrame(visualizerId); visualizerId = null; }
+        if(canvasCtx) canvasCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+        updateInfoPanel("Sequence terminated.", true);
+        if(currentMode) updateCustomizationPanel(); 
+    }
+    
+    function selectModeAndPrepare(modeKey) {
+        if (!MODE_CONFIG[modeKey]) {
+            console.error("Unknown mode key:", modeKey);
+            currentModeDisplay.textContent = "Unknown Mode"; customizationPanel.style.display = 'none';
+            playPauseButton.disabled = true; return;
+        }
+        currentMode = modeKey; const config = MODE_CONFIG[currentMode];
+        currentModeDisplay.textContent = config.name;
+        modeButtons.forEach(btn => { btn.classList.remove('active'); if (btn.dataset.mode === modeKey) btn.classList.add('active'); });
+        playPauseButton.disabled = false; stopButton.disabled = true; 
+        
+        userCustomizations.entrainmentFreq = config.defaultEntrainment;
+        userCustomizations.noiseType = config.defaultNoise || 'pink';
+        updateCustomizationPanel(); 
+
+        updateInfoPanel(`Mode: ${config.name}. Configure & Engage.`);
+        
+        if (isPlaying) { terminateSequence(); } 
+        else { emergencyClearAudioGraph("Mode Selection");} 
+        
+        totalSessionDuration = parseInt(durationInput.value) * 60;
+        if (isNaN(totalSessionDuration) || totalSessionDuration <= 0) totalSessionDuration = 30 * 60;
+        currentSessionTime = 0; updateTimerDisplayHMS();
+    }
+
+    function updateTimerDisplayHMS() {
+        const timeToDisplay = Math.max(0, totalSessionDuration - currentSessionTime);
+        const h=Math.floor(timeToDisplay/3600); const m=Math.floor((timeToDisplay%3600)/60); const s=Math.floor(timeToDisplay%60);
+        timerDisplay.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+    function startPrimaryTimer() {
+        clearInterval(primaryTimerInterval); updateTimerDisplayHMS();
+        primaryTimerInterval = addInterval(setInterval(() => {
+            currentSessionTime++; updateTimerDisplayHMS();
+            if (currentSessionTime >= totalSessionDuration) {
+                updateInfoPanel("Cycle Complete.", true); terminateSequence(); alert("Modulation Cycle Complete.");
+            }
+        }, 1000));
+    }
+    
+    function resizeCanvas() { if(visualizerCanvas){visualizerCanvas.width=window.innerWidth; visualizerCanvas.height=window.innerHeight;} }
+    window.addEventListener('resize', resizeCanvas); 
+    
+    function drawVisualizerLoop() {
+        if (!isPlaying || !analyserNode || !audioContext || audioContext.state !== 'running') {
+            if(visualizerId && cancelAnimationFrame){cancelAnimationFrame(visualizerId); visualizerId=null;}
+            if(canvasCtx){canvasCtx.fillStyle='rgba(13,27,42,0.8)';canvasCtx.fillRect(0,0,visualizerCanvas.width,visualizerCanvas.height);}return;
+        }
+        if(requestAnimationFrame) visualizerId = requestAnimationFrame(drawVisualizerLoop); 
+        if(analyserNode && visualizerDataArray) analyserNode.getByteFrequencyData(visualizerDataArray); else return;
+
+        if(canvasCtx){ 
+            canvasCtx.fillStyle='rgba(13,27,42,0.3)';canvasCtx.fillRect(0,0,visualizerCanvas.width,visualizerCanvas.height);
+            const bufferP = visualizerBufferLength*0.55; const barW=(visualizerCanvas.width/bufferP)*1.7; let x=0;
+            for(let i=0;i<bufferP;i++){
+                const barH=visualizerDataArray[i]/1.9; const hue=(i/bufferP)*90+200; 
+                canvasCtx.fillStyle=`hsla(${hue}, 80%, ${40 + barH/25}%, 0.6)`;
+                canvasCtx.fillRect(x, visualizerCanvas.height/2 - barH/2, barW, barH);
+                x+=barW+0.8;
+            }
+        }
+    }
+            
+    masterVolumeSlider.addEventListener('input', () => {
+        if(masterOutputGain && masterOutputGain.gain && audioContext && audioContext.state === 'running') { // Check audioContext state
+            masterOutputGain.gain.setTargetAtTime(parseFloat(masterVolumeSlider.value), audioContext.currentTime, 0.02);
+        } else if (masterOutputGain && masterOutputGain.gain) { // If context not running, set value directly (for next startup)
+            masterOutputGain.gain.value = parseFloat(masterVolumeSlider.value);
+        }
+    });
+    customEntrainmentFreqSelect.addEventListener('change', (e) => {
+        userCustomizations.entrainmentFreq = parseFloat(e.target.value);
+        if (isPlaying) updateInfoPanel("Entrainment Hz changes on next Engage.", true);
+        // else if(currentMode && !isPlaying) { // Optionally, immediately regenerate if paused and mode selected
+        //    generateModeAudio(currentMode);
+        // }
+    });
+    customNoiseTypeSelect.addEventListener('change', (e) => {
+        userCustomizations.noiseType = e.target.value;
+        if (isPlaying && currentMode && MODE_CONFIG[currentMode]?.noiseOptions) {
+            playCustomNoise(ambientBusGain); 
+        } else if (!isPlaying) {
+             updateInfoPanel("Noise type will apply next session.", true);
+        }
+    });
+
+    modeButtons.forEach(button => { button.addEventListener('click', async () => { try { await initMasterAudio(); selectModeAndPrepare(button.dataset.mode); } catch(e) { console.error("Mode select click error:",e);alert("Selection Error:"+e.message);}}); });
+    playPauseButton.addEventListener('click', async () => { if(!currentMode){alert("Please select a mode first.");return;}try{ await initMasterAudio();if (isPlaying)pauseSequence();else engageSequence(); }catch(e){console.error("Play/Pause click error:",e);alert("Engagement Error:"+e.message);}});
+    stopButton.addEventListener('click', terminateSequence);
+    durationInput.addEventListener('change', () => { if (!isPlaying) { totalSessionDuration = parseInt(durationInput.value)*60||30*60; currentSessionTime=0;updateTimerDisplayHMS(); }});
+    
+    window.addEventListener('load', () => {
+        resizeCanvas();
+        if (!(window.AudioContext || window.webkitAudioContext)) { alert("CRITICAL: Web Audio API Failed."); playPauseButton.disabled = true; modeButtons.forEach(b => b.disabled = true); }
+        else { if(generationInfoDisplay) updateInfoPanel("System Initialized. Select Mode.", false); }
+        totalSessionDuration = parseInt(durationInput.value) * 60; updateTimerDisplayHMS();
+        if(generationInfoDisplay) generationInfoDisplay.innerHTML = "Neuro-Acoustic Modulator Interface Online.<br>Select Target State Vector.";
+    });
+
+</script>
+</body>
+</html>
